@@ -19,9 +19,9 @@ class MainActivity : AppCompatActivity() {
 
   val tag = "MainActivity"
 
-  private var subscription: Subscription? = null
   private var userSetToRun: Boolean = false
-
+  private var accelSubscription: Subscription? = null
+  private var gyroSubscription: Subscription? = null
   private var alphabet: ArrayList<Char> = ArrayList()
 
   override fun onCreate(savedInstanceState: Bundle?) {
@@ -50,7 +50,7 @@ class MainActivity : AppCompatActivity() {
   }
 
   private fun startCollection(){
-    subscription = ReactiveSensors(this).observeSensor(Sensor.TYPE_ACCELEROMETER)
+    accelSubscription = ReactiveSensors(this).observeSensor(Sensor.TYPE_ACCELEROMETER)
         .subscribeOn(Schedulers.computation())
         .filter(ReactiveSensorFilter.filterSensorChanged())
         .map({x -> x.sensorEvent.values[1]})
@@ -59,10 +59,21 @@ class MainActivity : AppCompatActivity() {
         .subscribe { x ->
           // TODO: calculate zero crossing for 1 second data set (x)
         }
+
+    gyroSubscription = ReactiveSensors(this).observeSensor(Sensor.TYPE_GYROSCOPE)
+        .subscribeOn(Schedulers.computation())
+        .filter(ReactiveSensorFilter.filterSensorChanged())
+        .map({x -> x.sensorEvent.values[2]})
+        .buffer(1000, TimeUnit.MILLISECONDS)
+        .observeOn(AndroidSchedulers.mainThread())
+        .subscribe { x ->
+          // TODO: calculate gyro movements for 1 second data set (x)
+        }
   }
 
   private fun stopCollection(){
-    subscription?.unsubscribe()
+    accelSubscription?.unsubscribe()
+    gyroSubscription?.unsubscribe()
     motionLabel.text = "--"
   }
 }
