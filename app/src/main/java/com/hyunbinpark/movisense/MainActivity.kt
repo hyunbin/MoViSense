@@ -8,7 +8,6 @@ import com.github.pwittchen.reactivesensors.library.ReactiveSensorFilter
 import com.github.pwittchen.reactivesensors.library.ReactiveSensors
 import kotlinx.android.synthetic.main.activity_main.*
 import org.jetbrains.anko.onClick
-import org.jetbrains.anko.sensorManager
 import rx.Subscription
 import rx.android.schedulers.AndroidSchedulers
 import rx.schedulers.Schedulers
@@ -23,6 +22,9 @@ class MainActivity : AppCompatActivity() {
   private var accelSubscription: Subscription? = null
   private var gyroSubscription: Subscription? = null
   private var alphabet: ArrayList<Char> = ArrayList()
+
+  private var orientation: Float = 0.0f
+  private val gyroThreshold: Float = 10.0f
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
@@ -57,23 +59,36 @@ class MainActivity : AppCompatActivity() {
         .buffer(1000, TimeUnit.MILLISECONDS)
         .observeOn(AndroidSchedulers.mainThread())
         .subscribe { x ->
-          // TODO: calculate zero crossing for 1 second data set (x)
+          // Calculate zero crossing for 1 second data set (x)
+
         }
 
     gyroSubscription = ReactiveSensors(this).observeSensor(Sensor.TYPE_GYROSCOPE)
         .subscribeOn(Schedulers.computation())
         .filter(ReactiveSensorFilter.filterSensorChanged())
-        .map({x -> x.sensorEvent.values[2]})
-        .buffer(1000, TimeUnit.MILLISECONDS)
+        .map({x -> x.sensorEvent.values[2]}) // Take only rotation in user axis
+        .map({x -> Math.toDegrees(x.toDouble()).toFloat()}) // Convert to degrees
+        .buffer(1000, TimeUnit.MILLISECONDS) // Emit event every one second
+        .map(fun (x: List<Float>): Float{ // Take sum of buffer
+          var sum = 0.0f
+          val dT = 1.0f / x.size
+          for(num in x){
+            sum += num * dT
+          }
+          return sum
+        })
         .observeOn(AndroidSchedulers.mainThread())
         .subscribe { x ->
-          // TODO: calculate gyro movements for 1 second data set (x)
+          // Manipulate gyro displacement for 1 second data set (x)
+          if(Math.abs(x) >= gyroThreshold) orientation += x
+          Log.d(tag, "Current orientation: " + orientation)
         }
   }
 
   private fun stopCollection(){
     accelSubscription?.unsubscribe()
     gyroSubscription?.unsubscribe()
+    orientation = 0.0f
     motionLabel.text = "--"
   }
 }
