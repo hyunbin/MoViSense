@@ -22,8 +22,6 @@ class MainActivity : AppCompatActivity() {
   private var subscription: Subscription? = null
   private var userSetToRun: Boolean = false
 
-  private var velocity : Float = 0.0f
-  private val THRESHOLD_ACCEL: Float = 1.0f
   private var alphabet: ArrayList<Char> = ArrayList()
 
   override fun onCreate(savedInstanceState: Bundle?) {
@@ -56,32 +54,15 @@ class MainActivity : AppCompatActivity() {
         .subscribeOn(Schedulers.computation())
         .filter(ReactiveSensorFilter.filterSensorChanged())
         .map({x -> x.sensorEvent.values[1]})
-        .buffer(500, TimeUnit.MILLISECONDS)
+        .buffer(1000, TimeUnit.MILLISECONDS)
         .observeOn(AndroidSchedulers.mainThread())
         .subscribe { x ->
-          // Crude integration to calculate velocity
-          val period = 1.0f / x.size
-          var currentVelocity : Float = 0.0f
-          for(number in x){
-            Log.d(tag, "Accel: " + number)
-            currentVelocity += number * period
-          }
-
-          if(Math.abs(currentVelocity) > 0.3f) velocity += currentVelocity
-
-          // Log our results
-          val message : String = String.format("Velocity: %f", velocity);
-          Log.d(tag, message)
-
-          // Determine which letter to add to list
-          if(velocity > THRESHOLD_ACCEL) addToList('m')
-          else addToList('n')
+          // TODO: calculate zero crossing for 1 second data set (x)
         }
   }
 
   private fun stopCollection(){
     subscription?.unsubscribe()
-    velocity = 0.0f
     motionLabel.text = "--"
   }
 }
