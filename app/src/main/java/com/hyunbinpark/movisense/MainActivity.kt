@@ -1,6 +1,7 @@
 package com.hyunbinpark.movisense
 
 import android.hardware.Sensor
+import android.hardware.SensorManager
 import android.os.Bundle
 import android.support.v7.app.AppCompatActivity
 import android.util.Log
@@ -26,6 +27,9 @@ class MainActivity : AppCompatActivity() {
   private var orientation: Float = 0.0f
   private val gyroThreshold: Float = 10.0f
 
+  private var accelData: MutableList<Float> = ArrayList()
+  private val LOWPASS_ALPHA = 0.038f
+
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     setContentView(R.layout.activity_main)
@@ -46,24 +50,55 @@ class MainActivity : AppCompatActivity() {
       stopCollection()
   }
 
-  private fun addToList(c: Char){
+  private fun addMotionLetter(c: Char){
     alphabet.add(c)
     motionLabel.text = "" + c
   }
 
+  private fun appendToList(data: MutableList<Float>, input: List<Float>): Boolean {
+    var detectedStep: Boolean = false
+    for(i in input.indices){
+      if(data.size == 0){
+        data.add(0.0f)
+        continue
+      }
+      data.add(data.last() + LOWPASS_ALPHA * (input[i] - data.last()))
+      Log.d(tag, "Added data point: " + data.last())
+      if((data[data.size - 2] > 0 && data[data.size - 1] < 0)
+          || (data[data.size - 2] < 0 && data[data.size - 1] > 0)){
+        detectedStep = true
+      }
+    }
+    return detectedStep
+  }
+
   private fun startCollection(){
-    accelSubscription = ReactiveSensors(this).observeSensor(Sensor.TYPE_ACCELEROMETER)
+    accelSubscription = ReactiveSensors(this)
+        .observeSensor(Sensor.TYPE_ACCELEROMETER, SensorManager.SENSOR_DELAY_FASTEST)
         .subscribeOn(Schedulers.computation())
         .filter(ReactiveSensorFilter.filterSensorChanged())
-        .map({x -> x.sensorEvent.values[1]})
+        .map({x -> x.sensorEvent.values[1]}) // Take only up/down motion
         .buffer(1000, TimeUnit.MILLISECONDS)
         .observeOn(AndroidSchedulers.mainThread())
         .subscribe { x ->
           // Calculate zero crossing for 1 second data set (x)
-
+          val detectedMotion = appendToList(accelData, x)
+          if(detectedMotion){
+            Log.d(tag, "Detected motion")
+            val absoluteOrientation = Math.abs(orientation)
+            if(absoluteOrientation >= 0.0f && absoluteOrientation <= 60.0f)
+              addMotionLetter('f')
+            else if(absoluteOrientation >= 150.0f && absoluteOrientation <= 210.0f)
+              addMotionLetter('r')
+          }
+          else{
+            Log.d(tag, "No motion")
+            addMotionLetter('s')
+          }
         }
 
-    gyroSubscription = ReactiveSensors(this).observeSensor(Sensor.TYPE_GYROSCOPE)
+    gyroSubscription = ReactiveSensors(this)
+        .observeSensor(Sensor.TYPE_GYROSCOPE, SensorManager.SENSOR_DELAY_FASTEST)
         .subscribeOn(Schedulers.computation())
         .filter(ReactiveSensorFilter.filterSensorChanged())
         .map({x -> x.sensorEvent.values[2]}) // Take only rotation in user axis
@@ -89,6 +124,7 @@ class MainActivity : AppCompatActivity() {
     accelSubscription?.unsubscribe()
     gyroSubscription?.unsubscribe()
     orientation = 0.0f
+    accelData.clear()
     motionLabel.text = "--"
   }
 }
