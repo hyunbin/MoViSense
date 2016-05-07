@@ -69,6 +69,7 @@ class MainActivity : AppCompatActivity() {
         detectedStep = true
       }
     }
+    motionText.text = alphabet.toString()
     return detectedStep
   }
 
